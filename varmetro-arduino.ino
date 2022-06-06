@@ -1,56 +1,45 @@
-const byte adcPin = 0;  // A0
+// #include <math.h>
+// #include <avdweb_AnalogReadFast.h>
+#include "Varmetro.h"
+// #include "Reloj.h"
 
-const int MAX_RESULTS = 64*5;
+const float 
+  frecuencia = 60, 
+  fase = 30,
+  // automaticos
+  periodo = 1 / frecuencia,
+  omega = M_2_PI * frecuencia,
+  faseRd = fase * DEG_TO_RAD;
 
-volatile int results [MAX_RESULTS];
+varmetro::Varmetro v(250, 15);
+double t = 0;
 
-volatile int resultNumber;
-
-// ADC complete ISR
-ISR (ADC_vect)
-  {
-  if (resultNumber >= MAX_RESULTS)
-    resultNumber = 0;
-    //ADCSRA = 0;  // turn off ADC
-  else
-    results [resultNumber++] = ADC;
-  }  // end of ADC_vect
+void setup() {
+  Serial.begin(115200);
   
-EMPTY_INTERRUPT (TIMER1_COMPB_vect);
- 
-void setup ()
-  {
-  Serial.begin (115200);
-  Serial.println ();
+  // títulos de la gráfica
+  Serial.println("Voltaje, Corriente");
   
-  // reset Timer 1
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1 = 0;
-  TCCR1B = bit (CS11) | bit (WGM12);  // CTC, prescaler of 8
-  TIMSK1 = bit (OCIE1B);  // WTF?
-  OCR1A = 520;    
-  OCR1B = 520;   // 20 uS - sampling frequency 50 kHz [1 / (62.5e-9 * 8 * OCR1B+1) = 50000 Hz]
+  // reloj::begin();
+}
 
-  ADCSRA =  bit (ADEN) | bit (ADIE) | bit (ADIF);   // turn ADC on, want interrupt on completion
-  //ADCSRA |= bit (ADPS2);  // Prescaler of 16
-  //ADCSRA |= bit (ADPS2) | bit (ADPS0); //Prescaler of 32
-  //ADCSRA |= bit (ADPS0) | bit (ADPS1) | bit (ADPS2);   // 128
-  ADMUX = bit (REFS0) | (adcPin & 7);
-  ADCSRB = bit (ADTS0) | bit (ADTS2);  // Timer/Counter1 Compare Match B
-  ADCSRA |= bit (ADATE);   // turn on automatic triggering
-
-//  // wait for buffer to fill
-//  while (resultNumber < MAX_RESULTS)
-    { }
+void loop() {
+  v.leer(
+    (int) 1024 * sin(omega * t),
+    (int) 1024 * sin(omega * t + faseRd)
+  );
+  
+  if (t > 0.2) {
+    varmetro_foreach(i) {
+      v.estado(i);
+    }
     
-  }  // end of setup
+    v.estado();    
+    delay(10000);
+  }
+  Serial.println(t);
+  t += 0.001;
+}
 
-void loop () {
-    // wait for buffer to fill
-  while (resultNumber < MAX_RESULTS){}
-  for (int i = 0; i < MAX_RESULTS; i++)
-  Serial.println (results [i]);
-  delay(10000);}
 
   
