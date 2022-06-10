@@ -12,15 +12,22 @@ const int N_MAX_LECS = 105, N = N_MAX_LECS;
 // Guarda 200 muestrasy hace cálculos con ellas
 class Magnitud {
   protected:
-  byte i;
-  double escala, tiempoInicio, tiempoFin;
+  byte i, i0, i1;
   int muestras[N];
+  double 
+    escala, 
+    tiempoInicio, tiempoFin, 
+    tiempoInicioCiclo, tiempoFinCiclo, 
+    tiempoMuestreo,
+    periodo, frecuencia,
+    valorRMS
+  ;  
   
   public:
-  /* @param escala el valor maximo en rms para los datos */
-  Magnitud(const int escala = 1) {
+  /* @param escalaRMS el valor maximo en rms para los datos */
+  Magnitud(const int escalaRMS = 1) {
     i = 0;
-    this->escala = escala * M_SQRT2;
+    this->escala = escalaRMS * M_SQRT2;
   }
   
   // transforma un valor en bits al valor medido como magnitud fisica
@@ -36,8 +43,14 @@ class Magnitud {
     
     if(i == N) {
       i = 0;
-      tiempoFin = tiempoMuestra;Serial.println(tiempoFin);
+      tiempoFin = tiempoMuestra;//Serial.println(tiempoFin);
     }
+  }
+  
+  // calcula los valores y los alamacena para liberar
+  void analizar() {
+    calcularTiempos();
+    calcularValorRMS();
   }
   
   /* calcula el indice proximo en el que las funciones cruzan por 0
@@ -45,70 +58,70 @@ class Magnitud {
     el método interpolar permitirá obtener el valor en tiempo.
     @param i0 inidice inicial desde el cual empezar a contar
     @returns el valor del indice con el valor ANTES del cruce */
-  byte indiceCrucePorCero(const byte i0 = 0) {
-    for(byte i = i0; i < N - 1; i++)
+  byte buscarIndiceCrucePorCero(byte i = 0) {
+    for(; i < N - 1; i++)
       //Serial.println(muestras[i]);
       if(muestras[i] <= 512 && muestras[i + 1] > 512)
         return i;
-        
-    return 100;
   }
   
   /* devuelve el valor decimal estimado para obtener la raiz del seno que cruza */
   double interpolar(const byte i) {
-    double x0 = magnitud(muestras[i]), x1 = magnitud(muestras[i + 1]);
+    double x0 = getValor(i), x1 = getValor(i + 1);
     
     return i - x1 / (x1 - x0);
   }
   
-  double posicionATiempo(const double i) {
-    return getTiempoMuestreo() * i / N;
+  double getTiempoAPosicion(const double i) {
+    return tiempoMuestreo * i / N;
   }
   
-  // calcula el valor en rms de las muestras
-  double valorRMS() {
+  double getValorRMS() { return valorRMS; }
+  double getFrecuencia() { return frecuencia; }
+  double getPeriodo() { return periodo; }
+  double getTiempoInicio() { return tiempoInicio; }
+  double getTiempoFin() { return tiempoFin; }
+  double getTiempoInicioCiclo() { return tiempoInicioCiclo; }
+  double getTiempoFinCiclo() { return tiempoFinCiclo; }
+  double getTiempoMuestreo() { return tiempoMuestreo; }
+  
+  // recalcula el valor RMS de las muestras de la onda
+  void calcularValorRMS() {
     double ms = 0;
     
-    foreach(i, N)
-      ms += pow(muestras[i], 2) / N;
+    for(int i = i0; i < i1; i++)
+      ms += pow(getValor(i), 2) / N;
     
-    return magnitud(sqrt(ms));
+    valorRMS = sqrt(ms);
   }
   
-  // calcula el promedio en un array
-  double promedio(double arr[], byte lim) {
-    double res = 0;
+  void calcularTiempos() {
+    tiempoMuestreo = tiempoFin - tiempoInicio;
     
-    foreach(i, lim)
-      res += arr[i] / lim;
+    i0 = buscarIndiceCrucePorCero();
+    i1 = buscarIndiceCrucePorCero(i0 + 1);
       
-    return res;
+    tiempoInicioCiclo = getTiempoAPosicion(i0);
+    tiempoFinCiclo = getTiempoAPosicion(i1);
+    
+    periodo = tiempoFinCiclo - tiempoInicioCiclo;
+    frecuencia = 1 / periodo;
+  }
+    
+  // @returns el valor leído como magnitud fisica
+  double getValor(byte i) {
+    return magnitud(muestras[i]);
   }
   
   // @returns el valor leído como magnitud fisica
-  int operator [] (byte i) {
-    return magnitud(muestras[i]);
+  double operator [] (byte i) {
+    return getValor(i);
   }
   
   /* cambia la escala máxima de medición (evite su uso)
     @param escala el valor maximo en rms para los datos */
   void setEscala(int escala) {
     this->escala = escala * M_SQRT2;
-  }
-
-  /* @returns el tiempo de inicio de muestreo en segundos */
-  double getTiempoInicio() {
-    return tiempoInicio;
-  }
-  
-  /* @returns el tiempo final de muestreo en segundos */
-  double getTiempoFin() {
-    return tiempoFin;
-  }
-
-  /* @returns el tiempo de muestreo en segundos */
-  double getTiempoMuestreo() {
-    return tiempoFin - tiempoInicio;
   }
 
   /* plantilla para imprimir datos */
@@ -128,7 +141,7 @@ class Magnitud {
     Serial.print(i);
     Serial.print("]: ");
     
-    Serial.print(magnitud(muestras[i]), 7);
+    Serial.print(getValor(i), 7);
     Serial.println(unidad);
   }
   
@@ -136,30 +149,32 @@ class Magnitud {
   void estado(const char* nombre, const char* unidad = "") {
     Serial.println(nombre);
     
-    estado("Valor RMS", valorRMS(), unidad);
-    estado("Tiempo inicial", tiempoInicio, "seg");
-    estado("Tiempo final", tiempoFin, "seg");
-    estado("Transcurrido", getTiempoMuestreo(), "seg");
+    estado("Valor RMS", valorRMS, unidad);
+    estado("Tiempo inicial", tiempoInicio * 1000, "mseg");
+    estado("Tiempo final", tiempoFin * 1000, "mseg");
+    estado("Transcurrido", tiempoMuestreo * 1000, "mseg");
     
-    auto i0 = estadoCrucePorCero("Primer", 0, unidad);
-    estadoCrucePorCero("Segundo", i0 + 1, unidad);
+    Serial.println(i0);
+    Serial.println(i1);
+    estado("inicio del ciclo", tiempoInicioCiclo * 1000, "mseg");
+    estado("final del ciclo", tiempoFinCiclo * 1000, "mseg");
     
+    estadoCrucePorCero("Primer", i0, unidad);
+    estadoCrucePorCero("Segundo", i1, unidad);
+    
+    estado("Periodo", periodo * 1000, "mseg");
+    estado("Frecuencia", frecuencia, "Hz");
     Serial.println("");
   }
   
-  byte estadoCrucePorCero(const char* valorCardinal, const byte i0 = 0, const char* unidad = "") {
-    const byte i = indiceCrucePorCero(i0);
-    const double t = posicionATiempo(interpolar(i));
-    
+  void estadoCrucePorCero(const char* valorCardinal, const byte i, const char* unidad = "") {
     Serial.print(valorCardinal);
     Serial.print(" cruce por cero: ");
     printCorchetes(i, true);
     
-    estado("aprox. inferior", magnitud(muestras[i]), unidad);
-    estado("aprox. superior", magnitud(muestras[i + 1]), unidad);
-    estado("tiempo aproximado para cruce positivo", t, "seg");
-    
-    return i;
+    estado("aprox. inferior", getValor(i), unidad);
+    estado("aprox. superior", getValor(i + 1), unidad);
+    estado("tiempo aproximado para cruce positivo", getTiempoAPosicion(i) * 1000, "mseg");
   }
   
   void printCorchetes(const byte i, const bool saltarLinea = false) {

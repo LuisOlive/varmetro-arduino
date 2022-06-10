@@ -3,7 +3,7 @@
 /************** configuraciones ***************/ const float 
   frecuencia = 60, 
   fase = 48, 
-  frecuenciaMuestreo = 2400, // 50 - 100 Hz legibles
+  frecuenciaMuestreo = 3000, // 50 - 100 Hz legibles
   voltaje = 250, // RMS
   corriente = 5 // RMS
 /*********************************************/;
@@ -15,15 +15,14 @@ const float
   faseRd = fase * DEG_TO_RAD,
   tiempoEspera = 1 / frecuenciaMuestreo;
 
-varmetro::Varmetro v(voltaje, corriente);
+
 double t = 0;
 int i = 0;
 
+varmetro::Varmetro v(voltaje, corriente);
+
 void setup() {
   Serial.begin(115200);
-  
-  // títulos de la gráfica
-  Serial.println("Voltaje, Corriente");
 }
 
 void loop() {
@@ -40,12 +39,12 @@ void loop() {
 }
 
 void trasLecturasTomadas() {
-  varmetro_foreach(i) { // es un for xD
-    v.estado(i);
-  }
   
-  v.estado();    
-  delay(5000);
+  v.analizar();
+  
+  v.estado();  
+    
+  delay(3000);
   i = 0;
 }
   
